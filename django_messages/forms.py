@@ -12,7 +12,7 @@ else:
     notification = None
 
 from django_messages.models import Message
-from django_messages.fields import CommaSeparatedUserField
+from django_messages.fields import CommaSeparatedUserField, AutocompleteRecipient
 from django_messages.utils import format_quote
 
 
@@ -20,6 +20,8 @@ class MessageForm(forms.ModelForm):
     """
     base message form
     """
+    recipients_label = forms.CharField(label=_(u'Recipient'), required=True,
+            widget=AutocompleteRecipient(attrs={'size': 60}))
     recipients = CommaSeparatedUserField(label=_(u"Recipient"))
     subject = forms.CharField(label=_(u"Subject"))
     body = forms.CharField(label=_(u"Body"),
@@ -27,12 +29,18 @@ class MessageForm(forms.ModelForm):
 
     class Meta:
         model = Message
-        fields = ('recipients', 'subject', 'body',)
+        fields = ('recipients_label', 'recipients', 'subject', 'body',)
 
     def __init__(self, sender, *args, **kw):
         recipient_filter = kw.pop('recipient_filter', None)
         self.sender = sender
         super(MessageForm, self).__init__(*args, **kw)
+        initial = kw.get('initial', {})
+        recipients = self.data.get('recipients') or (initial.get('recipients') or '').split(',')
+        if recipients and not self.data.get('recipients_label'):
+            self.data['recipients_label'] = ', '.join([u.get_full_name() for u in User.objects.filter(
+                username__in=recipients)])
+            self.initial['recipients_label'] = self.data['recipients_label']
         if recipient_filter is not None:
             self.fields['recipients']._recipient_filter = recipient_filter
 
@@ -90,7 +98,7 @@ class ComposeForm(MessageForm):
 
     class Meta:
         model = Message
-        fields = ('recipients', 'subject', 'body',)
+        fields = ('recipients_label', 'recipients', 'subject', 'body',)
     
 
 class ReplyForm(MessageForm):

@@ -7,10 +7,11 @@ from django import forms
 from django.forms import widgets
 from django.contrib.auth.models import User
 from django.utils.translation import ugettext_lazy as _
+from django.utils.safestring import mark_safe
+from django.core.urlresolvers import reverse
 
 
-class CommaSeparatedUserInput(widgets.Input):
-    input_type = 'text'
+class CommaSeparatedUserInput(widgets.HiddenInput):
     
     def render(self, name, value, attrs=None):
         if value is None:
@@ -54,4 +55,35 @@ class CommaSeparatedUserField(forms.Field):
         
         return users
 
+
+
+class AutocompleteRecipient(widgets.TextInput):
+    def render(self, name, value, attrs):
+        out = super(AutocompleteRecipient, self).render(name, value, attrs)
+        out += """
+        <script type="text/javascript">
+        $(document).ready(function() {
+            var name_obj = $('#%(input_id)s');
+            var id_obj = $('#id_recipients');
+            $(name_obj).autocomplete({
+                source: '%(autocomplete_url)s',
+                minLength: 2,
+                focus: function(ev,ui) {
+                    $(name_obj).val(ui.item.label);
+                    return false;
+                },
+                select: function(ev,ui) {
+                    var item=ui.item;
+                    $(id_obj).val(item.value);
+                    $(name_obj).val(item.label);
+                    return false;
+                }
+            });
+        });
+        </script>
+        """ % {
+                'input_id': 'id_%s' % name,
+                'autocomplete_url': reverse('messages_recipients_autocomplete'),
+                }
+        return mark_safe(out)
 

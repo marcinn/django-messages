@@ -1,7 +1,7 @@
 # -*- coding:utf-8 -*-
 import datetime
 
-from django.http import Http404, HttpResponseRedirect
+from django.http import Http404, HttpResponseRedirect, HttpResponse
 from django.shortcuts import render_to_response, get_object_or_404, redirect
 from django.template import RequestContext
 from django.contrib.auth.models import User
@@ -11,6 +11,8 @@ from django.utils.translation import ugettext as _
 from django.utils.translation import ugettext_noop
 from django.core.urlresolvers import reverse
 from django.conf import settings
+from django.db.models import Q
+from django.utils import simplejson as json
 
 from django.db import transaction
 
@@ -185,4 +187,36 @@ def view(request, message_id, template_name='django_messages/view.html',
         'message': message,
         })
     return render_to_response(template_name, RequestContext(request, ctx))
+
+
+
+@login_required
+def autocomplete_recipients(request, avatar_callback=None,
+        user_filter_callback=None, user_label_callback=None):
+    if not request.is_ajax():
+        raise Http404
+    user = request.user
+    term = request.GET.get('term')
+    recipients = []
+
+    if term:
+        if user_filter_callback:
+            users = user_filter_callback(term)
+        else:
+            users = User.objects.filter(
+                Q(first_name__icontains=term)|
+                Q(last_name__icontains=term)|
+                Q(username__icontains=term))
+
+        if not user_label_callback:
+            user_label_callback = lambda x: '%s (%s)' % (x.get_full_name(), x.username)
+
+        for user in users:
+            recipients.append({
+                'value': user.username,
+                'label': user_label_callback(user),
+                'avatar': avatar_callback(user) if avatar_callback else None,
+                })
+    return HttpResponse(json.dumps(recipients))
+                    
 
